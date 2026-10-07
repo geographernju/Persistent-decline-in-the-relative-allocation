@@ -3,8 +3,8 @@ from scipy.stats import pearsonr
 from matplotlib.ticker import MultipleLocator,FormatStrFormatter
 from pathlib import Path
 plt.rcParams['font.family']='Times New Roman';plt.rcParams['mathtext.fontset']='custom';plt.rcParams['mathtext.rm']='Times New Roman';plt.rcParams['mathtext.it']='Times New Roman:italic';plt.rcParams['font.size']=24;plt.rcParams['axes.unicode_minus']=False
-ROOT=Path('D:/');npp_path=ROOT/'data/NPP and GPP/S2_npp9-8/ISBA-CTRIP_S2_npp.nc';eu_shp_path=ROOT/'data/Map/Europe 7-class.shp';na_shp_path=ROOT/'data/Map/Koppen_1991_2020_NA_big7_simple.shp';out_png=ROOT / 'results/Supplementary Fig. 3.png'
-models=[('ModNegExp',ROOT/'Detrending5/ModNegExp (5+3).nc'),('AgeDepSpline',ROOT/'Detrending5/AgeDepSpline (5+3).nc'),('SFRCS',ROOT/'Detrending5/SFRCS (5+3).nc'),('Spline',ROOT/'Detrending5/Spline (5+3).nc')]
+ROOT=Path('D:/');npp_path=ROOT/'data/NPP and GPP/S2_npp9-8/ISBA-CTRIP_S2_npp.nc';eu_shp_path=ROOT/'data/Map/Europe 7-class.shp';na_shp_path=ROOT/'data/Map/Koppen_1991_2020_NA_big7_simple.shp';out_png=ROOT/'results/Supplementary Fig. 3.png'
+models=[('ModNegExp',ROOT/'data/Processed data/Detrending5/ModNegExp (5+3).nc'),('AgeDepSpline',ROOT/'data/Processed data/Detrending5/AgeDepSpline (5+3).nc'),('SFRCS',ROOT/'data/Processed data/Detrending5/SFRCS (5+3).nc'),('Spline',ROOT/'data/Processed data/Detrending5/Spline (5+3).nc')]
 def temporal_std(da):
     count=da.count('year');mean=da.mean('year',skipna=True);variance=((da-mean)**2).sum('year',skipna=True)/count.where(count>0);return np.sqrt(variance)
 eu_shp=gpd.read_file(eu_shp_path);eu_shp=eu_shp.set_crs('EPSG:4326') if eu_shp.crs is None else eu_shp.to_crs('EPSG:4326')
