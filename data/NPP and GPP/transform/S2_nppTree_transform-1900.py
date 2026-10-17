@@ -10,7 +10,7 @@ import cftime
 from netCDF4 import Dataset
 from scipy.ndimage import distance_transform_edt
 ROOT=Path("D:/")
-# 原始数据下载脚本：D:/data/NPP and GPP/transform/wget.sh；来源：https://mdosullivan.github.io/GCB/
+# Raw data download script: D:/data/NPP and GPP/transform/wget.sh; source: https://mdosullivan.github.io/GCB/
 INPUT=ROOT/"S2_npptree"
 OUT_12=Path("D:/data/NPP and GPP/S2_npptree1-12")
 OUT_98=Path('D:/data/NPP and GPP/S2_npptree9-8')

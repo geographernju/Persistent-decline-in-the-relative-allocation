@@ -12,9 +12,9 @@ out_png.parent.mkdir(parents=True,exist_ok=True)
 plt.rcParams.update({'font.family':'Times New Roman','font.size':22,'mathtext.fontset':'custom','mathtext.rm':'Times New Roman','mathtext.it':'Times New Roman:italic','axes.unicode_minus':False,'figure.dpi':150,'savefig.dpi':DPI})
 styles=[('na','NA','#1f77b4','--',2.0),('eu','EU','#ff7f0e','--',2.0),('all','NA & EU',PEAK_COLOR,'-',2.8)]
 METHODS=[
-    ('ModNegExp',ROOT/'data/Processed data/r_diff and r_raw/ModNegExp (5+3)'),
-    ('SFRCS',ROOT/'data/Processed data/r_diff and r_raw/SFRCS (5+3)'),
-    ('Spline',ROOT/'data/Processed data/r_diff and r_raw/Spline (5+3)'),
+    ('ModNegExp (5+3)',ROOT/'data/Processed data/r_diff and r_raw/ModNegExp (5+3)'),
+    ('SFRCS (5+3)',ROOT/'data/Processed data/r_diff and r_raw/SFRCS (5+3)'),
+    ('Spline (5+3)',ROOT/'data/Processed data/r_diff and r_raw/Spline (5+3)'),
     ('AgeDepSpline (3+3)',ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (3+3)'),
     ('AgeDepSpline (4+3)',ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (4+3)'),
     ('AgeDepSpline (5+3) nppTree',ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (5+3npptree)')

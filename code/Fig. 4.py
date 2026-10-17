@@ -22,12 +22,12 @@ shp_boundary=ROOT/'data/Map/Boundary_of_warm_zone_and_cold_zone.shp'
 eu_shp_path=ROOT/'data/Map/Europe 7-class.shp'
 na_shp_path=ROOT/'data/Map/Koppen_1991_2020_NA_big7_simple.shp'
 r_diff_dir=ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (5+3)/All r_diff'
-out_png=ROOT / 'results/Fig. 4.png'
-Y0,Y1=1911,2014
+out_png=ROOT/'results/Fig. 4.png'
+MAP_Y0,MAP_Y1=1911,2014
 PLOT_Y0,PLOT_Y1=1911,2014
 YEAR_SHIFT=0
 TIME_DIM='window_center_year'
-MAP_YEARS=np.arange(Y0-YEAR_SHIFT,Y1-YEAR_SHIFT+1)
+MAP_YEARS=np.arange(MAP_Y0-YEAR_SHIFT,MAP_Y1-YEAR_SHIFT+1)
 PLOT_YEARS=np.arange(PLOT_Y0-YEAR_SHIFT,PLOT_Y1-YEAR_SHIFT+1)
 X_TICKS=[1920,1940,1960,1980,2000,2020]
 VARIABLES=['delta_SPEI12_68','delta_scpdsi_68','delta_tmp_68']
@@ -88,7 +88,8 @@ def load_tree_mask(ds):
         return tree_valid.fillna(0).astype(bool).transpose('latitude','longitude')
 def display_name(name):
     name=name.removeprefix('delta_').removesuffix('_68')
-    return f"{re.sub('(?i)scpdsi','scPDSI',name)} (summer)"
+    name=re.sub('(?i)^scpdsi$','scPDSI',name)
+    return f'{name} (summer)'
 def da_to_series(da):
     other=[dim for dim in da.dims if dim!=TIME_DIM]
     if other:da=da.mean(other,skipna=True)
@@ -131,11 +132,21 @@ def assign_map_factors(values,region_mask,tree_mask,lon2d,lat2d):
         nearest=cKDTree(donor_pts).query(missing_pts,k=1)[1]
         result[missing]=winners[donors][nearest]
     return np.ma.array(result,mask=~target),np.bincount(result[target].ravel(),minlength=len(VARIABLES)),int(target.sum())
+def format_pct(counts):
+    counts=np.asarray(counts,dtype=int)
+    total=int(counts.sum())
+    if total<=0:raise ValueError('No valid grid cells for percentage calculation')
+    exact=counts/total*100
+    pcts=np.floor(exact).astype(int)
+    for i in np.argsort(-(exact-pcts),kind='stable')[:100-int(pcts.sum())]:
+        pcts[i]+=1
+    return pcts
 def draw_panel(ds,values,mask,label,ax,reference,ylabel=None,mark_years=None,label_x=0.86,legend_loc='upper left',legend_bbox=(0,0.9)):
     assigned,counts,total=assign_factors(values,mask.values)
+    pcts=format_pct(counts)
     for index,name in enumerate(VARIABLES):
         series=da_to_series(ds[name].where(mask))
-        ax.plot(series.index,series.values,lw=1.8,color=COLORS[name],label=f'{display_name(name)} ({counts[index]/total*100:.1f}%)')
+        ax.plot(series.index,series.values,lw=1.8,color=COLORS[name],label=f'{display_name(name)} ({pcts[index]}%)')
     ax.plot(reference.index,reference.values,ls='-.',lw=2.2,color='k',label=r_diff_label)
     ax.margins(y=0.12)
     if ylabel is not None:ax.set_ylabel(ylabel,fontsize=30)
@@ -149,15 +160,6 @@ def draw_panel(ds,values,mask,label,ax,reference,ylabel=None,mark_years=None,lab
     handles,labels=ax.get_legend_handles_labels()
     items=[(h,t) for h,t in zip(handles,labels) if t==r_diff_label]+[(h,t) for h,t in zip(handles,labels) if t!=r_diff_label]
     ax.legend([it[0] for it in items],[it[1] for it in items],loc=legend_loc,bbox_to_anchor=legend_bbox,frameon=True,fontsize=20)
-def format_pct(counts):
-    total=np.sum(counts)
-    if total==0:return [0.0]*len(counts)
-    pcts=np.round(counts/total*100,1)
-    diff=round(100.0-float(np.sum(pcts)),1)
-    if not np.isclose(diff,0):
-        target_idx=int(np.argmax(counts))
-        pcts[target_idx]=round(pcts[target_idx]+diff,1)
-    return pcts
 source=xr.open_dataset(nc1)
 ds=source.reindex({TIME_DIM:PLOT_YEARS})
 tree_mask=load_tree_mask(ds)
@@ -173,7 +175,7 @@ na_assigned,na_counts,na_total=assign_map_factors(values,na_mask.values,tree_mas
 eu_assigned,eu_counts,eu_total=assign_map_factors(values,eu_mask.values,tree_mask.values,lon2d,lat2d)
 map_pcts=format_pct(na_counts+eu_counts)
 map_colors=[COLORS[name] for name in VARIABLES]
-map_handles=[Patch(facecolor=COLORS[name],edgecolor='none',label=f'{display_name(name)} ({map_pcts[i]:.1f}%)') for i,name in enumerate(VARIABLES)]
+map_handles=[Patch(facecolor=COLORS[name],edgecolor='none',label=f'{display_name(name)} ({map_pcts[i]}%)') for i,name in enumerate(VARIABLES)]
 map_handles.append(Line2D([0],[0],color='#111111',lw=2.4,ls=(0,(4,1.5)),label='Warm/Cold boundary'))
 world=gpd.read_file(shp_world)
 world=world.set_crs(epsg=4326) if world.crs is None else world.to_crs(epsg=4326)

@@ -5,7 +5,7 @@ import xarray as xr
 from netCDF4 import Dataset
 from scipy.ndimage import distance_transform_edt
 ROOT=Path("D:/")
-# 原始数据来源：https://www.nesdc.org.cn/sdo/detail?id=612f42ee7e28172cbed3d809 和 https://www.glass.hku.hk/download.html
+# Original data sources: https://www.nesdc.org.cn/sdo/detail?id=612f42ee7e28172cbed3d809 and https://www.glass.hku.hk/download.html
 INPUT=ROOT/"NPP (1-2)"
 OUT=Path("D:/data/NPP and GPP/NPP (1-2)")
 MASK_FILE=Path('D:/data/NPP and GPP/transform/1.nc')
