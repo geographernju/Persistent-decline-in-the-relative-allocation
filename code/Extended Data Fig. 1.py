@@ -1,124 +1,247 @@
-
-import warnings,xarray as xr,numpy as np,geopandas as gpd,matplotlib.pyplot as plt
-from scipy.stats import pearsonr
-from matplotlib.ticker import MultipleLocator,FormatStrFormatter
+import os,glob,numpy as np,xarray as xr,geopandas as gpd,matplotlib.pyplot as plt,matplotlib as mpl,pandas as pd
 from pathlib import Path
-warnings.filterwarnings('ignore',message='Mean of empty slice')
-plt.rcParams['font.family']='Times New Roman';plt.rcParams['mathtext.fontset']='custom';plt.rcParams['mathtext.rm']='Times New Roman';plt.rcParams['mathtext.it']='Times New Roman:italic';plt.rcParams['font.size']=24;plt.rcParams['axes.unicode_minus']=False
+from rasterio.transform import from_bounds
+from rasterio.features import rasterize
+from shapely.geometry import box
+from matplotlib.ticker import MultipleLocator,FormatStrFormatter
 ROOT=Path('D:/')
-npp_paths=[ROOT/'data/NPP and GPP/S2_npp9-8/ISBA-CTRIP_S2_npp.nc',ROOT/'data/NPP and GPP/S2_npp9-8/CLASSIC_S2_npp.nc',ROOT/'data/NPP and GPP/S2_npp9-8/iMAPLE_S2_npp.nc']
-npptree_path=ROOT/'data/NPP and GPP/S2_npptree9-8/ISBA-CTRIP_S2_nppTree.nc'
-eu_shp_path=ROOT/'data/Map/Europe 7-class.shp'
-na_shp_path=ROOT/'data/Map/Koppen_1991_2020_NA_big7_simple.shp'
-out_png=ROOT/'results/Extended Data Fig. 1.png'
-models=[('ModNegExp (5+3)',ROOT/'data/Processed data/TRW/ModNegExp (5+3).nc','ModNegExp'),('SFRCS (5+3)',ROOT/'data/Processed data/TRW/SFRCS (5+3).nc','SFRCS'),('Spline (5+3)',ROOT/'data/Processed data/TRW/Spline (5+3).nc','Spline'),('AgeDepSpline (4+3)',ROOT/'data/Processed data/TRW/AgeDepSpline (4+3).nc','AgeDepSpline'),('AgeDepSpline (3+3)',ROOT/'data/Processed data/TRW/AgeDepSpline (3+3).nc','AgeDepSpline'),('AgeDepSpline (5+3) + nppTree',ROOT/'data/Processed data/TRW/AgeDepSpline (5+3).nc','AgeDepSpline')]
-plot_years=np.arange(1900,2026)
-def temporal_std(da):
-    count=da.count('year');mean=da.mean('year',skipna=True)
-    return np.sqrt(((da-mean)**2).sum('year',skipna=True)/count.where(count>0))
-def find_data_var(ds,preferred):
-    for name in preferred:
-        if name in ds.data_vars:return name
-    lower_map={name.lower():name for name in ds.data_vars}
-    for name in preferred:
-        if name.lower() in lower_map:return lower_map[name.lower()]
-    candidates=[name for name in ds.data_vars if 'year' in name.lower() or any(d.lower()=='year' for d in ds[name].dims)]
-    if candidates:return candidates[0]
-    candidates=list(ds.data_vars)
-    if candidates:return candidates[0]
-    raise ValueError('No valid data variable found')
-def normalize_year(da,ds):
-    time_dims=[d for d in da.dims if d not in ('latitude','longitude')]
-    if len(time_dims)!=1:raise ValueError(f'Unexpected dimensions: {da.dims}')
-    time_dim=time_dims[0]
-    if 'year' in ds.variables:years=np.asarray(ds['year'].values)
-    elif time_dim in ds.coords:years=np.asarray(ds[time_dim].values)
-    else:raise ValueError('No year coordinate found')
-    years=np.asarray(years,dtype=float).astype(int)
-    if time_dim=='year':da=da.assign_coords(year=years)
-    else:da=da.assign_coords({time_dim:years}).rename({time_dim:'year'})
-    if float(np.nanmin(da.longitude.values))>=0:da=da.assign_coords(longitude=(da.longitude+180)%360-180)
-    return da.sortby('year').sortby('latitude').sortby('longitude')
-def safe_quantiles(reg):
-    values=np.asarray(reg.transpose('year','points').values,dtype=np.float64)
-    result=np.full((3,values.shape[0]),np.nan,dtype=np.float64)
-    for i in np.flatnonzero(np.any(np.isfinite(values),axis=1)):
-        row=values[i];row=row[np.isfinite(row)]
-        result[:,i]=np.percentile(row,[50,25,75])
+recon_path=ROOT/'data/Processed data/TRW/AgeDepSpline (5+3).nc'
+model_dir=ROOT/'data/NPP and GPP/S2_npp9-8'
+out_png=ROOT / 'results/Extended Data Fig. 1.png'
+YEAR_MIN,YEAR_MAX=1899,2025
+WIN=20
+MIN_N=20
+DPI=600
+regions={'NA':{'shp':ROOT/'data/Map/Koppen_1991_2020_NA_big7.shp','lon_min':-167.27,'lon_max':-55.0,'lat_min':9.58,'lat_max':74.99,'agg':{102:[1,2,3,4,5],103:[6,7],104:[1,2,3,4,5,6,7]}},'EU':{'shp':ROOT/'data/Map/Europe 7.shp','lon_min':-11.0,'lon_max':57.0,'lat_min':30.0,'lat_max':75.0,'agg':{102:[2,3,4,5],103:[6,7],104:[2,3,4,5,6,7]}}}
+label_map={1:'Tropical',2:'Arid',3:'Temperate',4:'Dfa',5:'Dfb',102:'Warm',103:'Cold',104:'All'}
+base_classes=[1,2,3,4,5,6,7]
+plot_order=[1,2,3,4,5,102,103,104]
+plt.rcParams['font.family']='Times New Roman'
+plt.rcParams['mathtext.fontset']='custom'
+plt.rcParams['mathtext.rm']='Times New Roman'
+plt.rcParams['mathtext.it']='Times New Roman:italic'
+mpl.rcParams['axes.unicode_minus']=False
+mpl.rcParams['font.size']=18
+def subset_box(da,lon_min,lon_max,lat_min,lat_max):
+    lon=da['longitude'].values
+    lat=da['latitude'].values
+    lon_slice=slice(lon_min,lon_max) if lon[0]<=lon[-1] else slice(lon_max,lon_min)
+    lat_slice=slice(lat_min,lat_max) if lat[0]<=lat[-1] else slice(lat_max,lat_min)
+    return da.sel(longitude=lon_slice,latitude=lat_slice)
+def rasterize_classes(path,lon,lat,lon_min,lon_max,lat_min,lat_max):
+    gdf=gpd.read_file(path)
+    if gdf.crs is None:
+        gdf=gdf.set_crs(epsg=4326)
+    else:
+        gdf=gdf.to_crs(epsg=4326)
+    gdf=gpd.clip(gdf,box(lon_min,lat_min,lon_max,lat_max))
+    prefer=['code','CODE','Code','class','Class','CLASS','label','Label']
+    col=next((c for c in prefer if c in gdf.columns),None)
+    if col is None:
+        col=next(c for c in gdf.columns if c.lower() not in ('geometry','geom','id','fid','ogc_fid'))
+    if pd.api.types.is_numeric_dtype(gdf[col]):
+        gdf['__code__']=pd.to_numeric(gdf[col],errors='coerce').astype('Int16')
+    else:
+        values=gdf[col].astype(str).str.strip().str.extract(r'^(Dfa|Dfb|[ABCDE])',expand=False)
+        gdf['__code__']=values.map({'A':1,'B':2,'C':3,'Dfa':4,'Dfb':5,'D':6,'E':7}).astype('Int16')
+    gdf=gdf.dropna(subset=['__code__'])
+    transform=from_bounds(float(lon.min()),float(lat.min()),float(lon.max()),float(lat.max()),len(lon),len(lat))
+    grid=rasterize([(geom,int(value)) for geom,value in zip(gdf.geometry,gdf['__code__'])],out_shape=(len(lat),len(lon)),transform=transform,fill=0,dtype='int16')
+    if lat[0]<lat[-1]:
+        grid=np.flipud(grid)
+    return grid
+def zone_mask(grid,code,region):
+    if code in base_classes:
+        return grid==code
+    return np.isin(grid,region['agg'][code])
+def get_recon_da(ds):
+    candidates=[name for name in ds.data_vars if 'year' in ds[name].dims]
+    preferred=[name for name in candidates if 'recon' in name.lower() or 'agedep' in name.lower()]
+    if not candidates:
+        raise ValueError('No yearly reconstruction variable found')
+    return ds[preferred[0] if preferred else candidates[0]]
+def get_model_var(ds):
+    candidates=[name for name in ds.data_vars if 'year' in ds[name].dims]
+    preferred=[name for name in candidates if name.lower() in ('npp','gpp')]
+    return preferred[0] if preferred else candidates[0] if candidates else None
+def rolling_corr_from_diff(a,b,window,min_n):
+    a=np.asarray(a,dtype=np.float64)
+    b=np.asarray(b,dtype=np.float64)
+    length=a.shape[0]-window+1
+    result=np.full((length,)+a.shape[1:],np.nan,dtype=np.float32)
+    for t in range(length):
+        x=a[t:t+window]
+        y=b[t:t+window]
+        valid=np.isfinite(x)&np.isfinite(y)
+        n=valid.sum(axis=0)
+        sx=np.where(valid,x,0.0).sum(axis=0)
+        sy=np.where(valid,y,0.0).sum(axis=0)
+        mx=np.divide(sx,n,out=np.zeros_like(sx),where=n>0)
+        my=np.divide(sy,n,out=np.zeros_like(sy),where=n>0)
+        xc=np.where(valid,x-mx,0.0)
+        yc=np.where(valid,y-my,0.0)
+        vx=np.sum(xc*xc,axis=0)
+        vy=np.sum(yc*yc,axis=0)
+        cov=np.sum(xc*yc,axis=0)
+        denominator=np.sqrt(vx*vy)
+        usable=(n>=min_n)&(denominator>0)&np.isfinite(denominator)
+        r=np.full(denominator.shape,np.nan,dtype=np.float32)
+        r[usable]=np.clip(cov[usable]/denominator[usable],-1.0,1.0)
+        result[t]=r
     return result
-eu_shp=gpd.read_file(eu_shp_path);eu_shp=eu_shp.set_crs('EPSG:4326') if eu_shp.crs is None else eu_shp.to_crs('EPSG:4326')
-na_shp=gpd.read_file(na_shp_path);na_shp=na_shp.set_crs('EPSG:4326') if na_shp.crs is None else na_shp.to_crs('EPSG:4326')
-region_cache={}
-def region_indices(da):
-    key=(da.latitude.values.tobytes(),da.longitude.values.tobytes())
-    if key not in region_cache:
-        stacked=da.isel(year=0).stack(points=('latitude','longitude'))
-        gdf=gpd.GeoDataFrame({'point_index':np.arange(stacked.sizes['points'])},geometry=gpd.points_from_xy(stacked.longitude.values,stacked.latitude.values),crs='EPSG:4326')
-        eu_join=gpd.sjoin(gdf,eu_shp,how='inner',predicate='within')
-        na_join=gpd.sjoin(gdf,na_shp,how='inner',predicate='within')
-        region_cache[key]=(np.unique(eu_join.point_index.values),np.unique(na_join.point_index.values))
-    return region_cache[key]
-def extract_series(ds_trw,trw_var,npp_file,npp_preferred):
-    with xr.open_dataset(npp_file) as ds_npp:
-        trw=normalize_year(ds_trw[find_data_var(ds_trw,[trw_var])],ds_trw)
-        npp=normalize_year(ds_npp[find_data_var(ds_npp,npp_preferred)],ds_npp)
-        years=np.intersect1d(npp.year.values,trw.year.values)
-        years=years[(years>=1900)&(years<=2025)]
-        if years.size<2:raise ValueError(f'No sufficient overlapping years: {npp_file.name}')
-        npp=npp.sel(year=years);trw=trw.sel(year=years)
-        same_grid=np.array_equal(npp.latitude.values,trw.latitude.values) and np.array_equal(npp.longitude.values,trw.longitude.values)
-        if not same_grid:npp=npp.interp(latitude=trw.latitude,longitude=trw.longitude)
-        valid=np.isfinite(trw)&np.isfinite(npp)&(npp!=0)
-        ratio=xr.where(valid,trw/npp,np.nan)
-        mean_ratio=ratio.mean('year',skipna=True);std_ratio=temporal_std(ratio)
-        ratio_z=xr.where(np.isfinite(std_ratio)&(std_ratio>0),(ratio-mean_ratio)/std_ratio,np.nan)
-        eu_ids,na_ids=region_indices(ratio_z)
-        if len(eu_ids)==0 or len(na_ids)==0:raise ValueError(f'No regional grid cells: {npp_file.name}')
-        stacked=ratio_z.stack(points=('latitude','longitude'))
-        eu=safe_quantiles(stacked.isel(points=eu_ids))
-        na=safe_quantiles(stacked.isel(points=na_ids))
-        return years,eu,na
-def combine_model_series(results,region):
-    arrays=[]
-    for years,eu,na in results:
-        data=eu if region=='EU' else na
-        aligned=np.full((3,plot_years.size),np.nan)
-        aligned[:,years-plot_years[0]]=data
-        arrays.append(aligned)
-    return np.nanmean(np.stack(arrays),axis=0)
-fig,axes=plt.subplots(3,2,figsize=(20,18),dpi=600,sharex=True,sharey=True)
-axes=axes.ravel();letters=['a','b','c','d','e','f']
-for index,(ax,config,letter) in enumerate(zip(axes,models,letters)):
-    title,trw_path,trw_var=config
-    input_files=npp_paths if index<5 else [npptree_path]
-    results=[]
-    with xr.open_dataset(trw_path) as ds_trw:
-        for path in input_files:
-            if not path.exists() and (path.parent/(' '+path.name)).exists():path=path.parent/(' '+path.name)
-            results.append(extract_series(ds_trw,trw_var,path,['npp'] if index<5 else ['nppTree','npptree','npp_tree','npp']))
-    eu=combine_model_series(results,'EU');na=combine_model_series(results,'NA')
-    valid=np.isfinite(eu[0])&np.isfinite(na[0])
-    r,p=pearsonr(eu[0,valid],na[0,valid]) if np.count_nonzero(valid)>=3 else (np.nan,np.nan)
-    l1,=ax.plot(plot_years,eu[0],linewidth=2.2,label='EU')
-    ax.fill_between(plot_years,eu[1],eu[2],color=l1.get_color(),alpha=0.25)
-    l2,=ax.plot(plot_years,na[0],linewidth=2.2,label='NA')
-    ax.fill_between(plot_years,na[1],na[2],color=l2.get_color(),alpha=0.25)
-    ax.axvline(x=1945,color='black',linestyle='--',linewidth=1.8,zorder=5)
-    ax.text(1945,0.03,'1945',color='black',fontsize=22,ha='center',va='bottom',transform=ax.get_xaxis_transform(),zorder=6)
-    ax.set_xlim(1900,2025);ax.tick_params(labelsize=20)
-    ax.xaxis.set_major_locator(MultipleLocator(20));ax.yaxis.set_major_locator(MultipleLocator(1));ax.yaxis.set_major_formatter(FormatStrFormatter('%d'))
-    ax.text(0.02,0.98,letter,transform=ax.transAxes,ha='left',va='top',fontweight='bold',fontsize=30)
-    ax.text(0.5,0.98,title,transform=ax.transAxes,ha='center',va='top',fontsize=22)
-    if np.isfinite(p):
-        p_text=r'$\mathit{p}$ < 0.001' if p<0.001 else rf'$\mathit{{p}}$ = {p:.3f}'
-        stat_text=rf'$\mathit{{r}}$ = {r:.2f}, '+p_text
-    else:stat_text=r'$\mathit{r}$ = NA, $\mathit{p}$ = NA'
-    ax.text(0.97,0.08,stat_text,transform=ax.transAxes,ha='right',va='bottom',fontsize=19)
-    if index%2==0:ax.set_ylabel('Standardized TRW/NPP',fontsize=23)
-    if index>=4:ax.set_xlabel('Year',fontsize=23)
-axes[0].legend(frameon=True,fancybox=False,edgecolor='black',fontsize=18,loc='upper right')
-fig.tight_layout(h_pad=0.8,w_pad=0.8)
-out_png.parent.mkdir(parents=True,exist_ok=True)
-fig.savefig(out_png,bbox_inches='tight',pad_inches=0.12,facecolor='white',dpi=600)
-plt.close(fig)
-print('✅ Saved figure:', out_png)
+def frame_sum_count(correlations,mask):
+    sums=np.full(correlations.shape[0],np.nan,dtype=np.float64)
+    counts=np.zeros(correlations.shape[0],dtype=np.int64)
+    for i,frame in enumerate(correlations):
+        valid=mask&np.isfinite(frame)
+        counts[i]=int(valid.sum())
+        if counts[i]>0:
+            sums[i]=float(frame[valid].sum(dtype=np.float64))
+    return sums,counts
+def combine_region_stats(stats):
+    all_years=np.array(sorted(set().union(*(set(years.tolist()) for years,_,_ in stats))),dtype=float)
+    total_sum=np.zeros(all_years.size,dtype=np.float64)
+    total_count=np.zeros(all_years.size,dtype=np.int64)
+    index={year:i for i,year in enumerate(all_years)}
+    for years,sums,counts in stats:
+        for year,value,count in zip(years,sums,counts):
+            if count>0 and np.isfinite(value):
+                j=index[year]
+                total_sum[j]+=value
+                total_count[j]+=count
+    values=np.divide(total_sum,total_count,out=np.full(all_years.size,np.nan,dtype=np.float64),where=total_count>0)
+    return all_years,values
+def top3(data):
+    ranked=[]
+    for name,(years,values) in data.items():
+        if np.isfinite(values).any():
+            ranked.append((name,float(np.nanmean(values))))
+    ranked.sort(key=lambda x:x[1],reverse=True)
+    return [name for name,value in ranked[:3]]
+def clean_model_name(name):
+    return name.replace('_S2_npp','')
+def choose_step(low,high):
+    span=max(high-low,1e-6)
+    if span<=0.3:
+        return 0.05
+    if span<=0.8:
+        return 0.1
+    if span<=1.6:
+        return 0.2
+    if span<=3.2:
+        return 0.4
+    return 0.5
+def compute_row_limits(series,row_codes):
+    limits=[]
+    for code in row_codes:
+        names=top3(series[code])
+        for name in names:
+            _,values=series[code][name]
+            finite=values[np.isfinite(values)]
+            if finite.size:
+                limits.append((float(finite.min()),float(finite.max())))
+    if not limits:
+        return -0.1,0.1,0.1
+    low=min(v[0] for v in limits)
+    high=max(v[1] for v in limits)
+    span=max(high-low,0.2)
+    mid=0.5*(low+high)
+    low=mid-span/2
+    high=mid+span/2
+    step=choose_step(low,high)
+    low=np.floor(low/step)*step
+    high=np.ceil(high/step)*step
+    return low,high,step
+def draw_panel(ax,code,data,index,row_ylim):
+    names=top3(data)
+    if not names:
+        ax.text(0.5,0.5,'No data',ha='center',va='center',fontsize=16)
+        ax.set_axis_off()
+        return
+    used=set()
+    for name in names:
+        years,values=data[name]
+        label=clean_model_name(name)
+        if label in used:
+            k=2
+            while f'{label} ({k})' in used:
+                k+=1
+            label=f'{label} ({k})'
+        used.add(label)
+        ax.plot(years,values,linewidth=1.3,label=label)
+    row=index//4
+    col=index%4
+    ylow,yhigh,ystep=row_ylim
+    ax.set_xlim(YEAR_MIN+(WIN+1)/2,YEAR_MAX-(WIN-1)/2)
+    ax.set_ylim(ylow,yhigh)
+    ax.xaxis.set_major_locator(MultipleLocator(20))
+    ax.yaxis.set_major_locator(MultipleLocator(ystep))
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f' if ystep>=0.1 else '%.2f'))
+    ax.tick_params(axis='both',labelsize=15)
+    ax.tick_params(axis='x',which='major',bottom=True,top=False,labelbottom=True,length=4)
+    ax.tick_params(axis='y',which='major',left=True,right=False,labelleft=col==0,length=4)
+    ax.set_xlabel('Year' if row==1 else '',fontsize=18)
+    ax.set_ylabel(r'$\mathit{r}_{\mathrm{moving}}$' if col==0 else '',fontsize=20)
+    ax.text(0.02,0.95,chr(97+index),transform=ax.transAxes,ha='left',va='top',fontsize=21,fontweight='bold')
+    ax.text(0.98,0.95,label_map[code],transform=ax.transAxes,ha='right',va='top',fontsize=17,fontweight='bold')
+    legend_loc='upper center' if index==6 else 'lower right'
+    ax.legend(fontsize=14,frameon=True,loc=legend_loc,borderpad=0.15,handlelength=1.4,handletextpad=0.4)
+def main():
+    out_png.parent.mkdir(parents=True,exist_ok=True)
+    region_data={}
+    with xr.open_dataset(recon_path) as ds:
+        recon=get_recon_da(ds).sel(year=slice(YEAR_MIN,YEAR_MAX))
+        for region_name,region in regions.items():
+            tree=subset_box(recon,region['lon_min'],region['lon_max'],region['lat_min'],region['lat_max']).load()
+            class_grid=rasterize_classes(region['shp'],tree['longitude'].values,tree['latitude'].values,region['lon_min'],region['lon_max'],region['lat_min'],region['lat_max'])
+            region_data[region_name]={'tree':tree,'class_grid':class_grid}
+    files=sorted([path for path in model_dir.rglob('*.nc') if not path.name.startswith('2')],key=lambda path:str(path).lower())
+    if not files:
+        raise FileNotFoundError(model_dir)
+    series={code:{} for code in plot_order}
+    for path in files:
+        model_name=path.relative_to(model_dir).with_suffix('').as_posix().replace('/','_')
+        region_stats={code:[] for code in plot_order}
+        with xr.open_dataset(path) as ds:
+            variable=get_model_var(ds)
+            if variable is None:
+                continue
+            model_all=ds[variable].sel(year=slice(YEAR_MIN,YEAR_MAX))
+            for region_name,region in regions.items():
+                tree=region_data[region_name]['tree']
+                class_grid=region_data[region_name]['class_grid']
+                model=subset_box(model_all,region['lon_min'],region['lon_max'],region['lat_min'],region['lat_max'])
+                tree_years=tree['year'].values.astype(int)
+                model_years=model['year'].values.astype(int)
+                common=np.intersect1d(tree_years,model_years)
+                common=common[(common>=YEAR_MIN)&(common<=YEAR_MAX)]
+                if common.size<WIN+1:
+                    continue
+                a=tree.sel(year=common)
+                b=model.sel(year=common)
+                same_grid=b.sizes.get('latitude')==a.sizes['latitude'] and b.sizes.get('longitude')==a.sizes['longitude']
+                if same_grid:
+                    same_grid=np.allclose(b['latitude'],a['latitude']) and np.allclose(b['longitude'],a['longitude'])
+                if not same_grid:
+                    b=b.interp(latitude=a['latitude'],longitude=a['longitude'])
+                a_values=a.values.astype(np.float64)
+                b_values=b.load().values.astype(np.float64)
+                correlations=rolling_corr_from_diff(np.diff(a_values,axis=0),np.diff(b_values,axis=0),WIN,MIN_N)
+                years=(common[1:common.size-WIN+1]+common[WIN:])/2
+                for code in plot_order:
+                    mask=zone_mask(class_grid,code,region)
+                    sums,counts=frame_sum_count(correlations,mask)
+                    region_stats[code].append((years,sums,counts))
+        for code in plot_order:
+            if region_stats[code]:
+                series[code][model_name]=combine_region_stats(region_stats[code])
+    row_ylims=[compute_row_limits(series,plot_order[:4]),compute_row_limits(series,plot_order[4:])]
+    fig,axes=plt.subplots(2,4,figsize=(18,8.5),constrained_layout=True)
+    axes=axes.ravel()
+    for index,code in enumerate(plot_order):
+        draw_panel(axes[index],code,series[code],index,row_ylims[index//4])
+    fig.savefig(out_png,dpi=DPI,bbox_inches='tight',facecolor='white')
+    plt.close(fig)
+    print('✅ Saved figure:',out_png)
+if __name__=='__main__':
+    main()
