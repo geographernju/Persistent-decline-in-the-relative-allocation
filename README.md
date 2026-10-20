@@ -1,17 +1,15 @@
-# Code and Figure Reproduction Guide
+# Code and Figure Reproduction
 
 **Persistent decline in the relative allocation of net primary productivity to xylem formation**
 
-This guide describes the files currently present in `D:/code`, `D:/data`, and `D:/results`. It was revised after inspecting the source code, directory structure, input references, and PNG metadata on 21 October 2026.
+This README describes the figure scripts, processed data, and input paths used in the study. The scripts use a Windows directory structure rooted at `D:/`. Figures can be generated from the corresponding processed inputs; rebuilding the datasets also requires the original tree-ring, climate, and model data described below.
 
-The inspection did not rerun the analyses or regenerate figures. Existing outputs establish that files are present; they do not establish that the current code reproduces them numerically or visually.
-
-## 1. Project layout
+## 1. Project structure
 
 ```text
 D:/
 ├── README.md
-├── code/                         19 figure scripts and run_all.py
+├── code/                         Figure scripts and run_all.py
 ├── data/
 │   ├── 1. ...csv through 9. ...csv
 │   ├── Map/
@@ -33,63 +31,50 @@ D:/
 │       ├── r_diff and r_raw/
 │       ├── Sliding difference/
 │       └── TRW/
-└── results/                      19 figure PNGs
+└── results/                      Figure PNGs
 ```
 
-There are four main figures, nine Extended Data figures, and six Supplementary figures. Each has a matching Python script in `code/` and PNG in `results/`. All 19 existing PNGs report approximately 600 dpi in their metadata.
+The figure set consists of four main figures, nine Extended Data figures, and six Supplementary figures. The corresponding Python scripts are in `code/`, with PNG outputs in `results/`.
 
 ## 2. Software and paths
 
-Figure scripts use Python. Imports across the figure and preprocessing code include:
-
-- NumPy, pandas, SciPy, xarray, and Matplotlib;
-- GeoPandas, Shapely, and Rasterio for spatial operations;
-- netCDF4 and cftime for NetCDF data and calendars;
-- scikit-learn, PyKrige, and joblib for selected analyses.
-
-Tree-ring detrending additionally requires R and `dplR`; `tools` is part of R. Scripts generally request Times New Roman, which should be installed for matching text appearance. Package versions are not pinned in this guide; an exact software environment was not reconstructed during this inspection.
-
-Example Python package installation:
+Python packages used across the scripts include NumPy, pandas, SciPy, xarray, Matplotlib, GeoPandas, Shapely, Rasterio, netCDF4, cftime, scikit-learn, PyKrige, and joblib. The tree-ring detrending scripts also require R and `dplR`.
 
 ```powershell
 python -m pip install numpy pandas scipy xarray matplotlib geopandas shapely rasterio netCDF4 cftime scikit-learn pykrige joblib
 ```
 
-Example R package installation:
-
 ```r
 install.packages("dplR")
 ```
 
-Most figure scripts set `ROOT = Path("D:/")`; `run_all.py` separately sets `ROOT = Path("D:/code")`. Preprocessing scripts also contain absolute paths, including paths outside these three project directories. Changing a single `ROOT` does not update every path. When relocating the project, inspect all input and output settings.
+Most plots use Times New Roman. Software versions are not pinned, so differences in package versions may affect results or rendering.
 
-Some scripts refer to `data/map`, whereas the actual directory is `data/Map`. Windows resolves this case difference; a case-sensitive system requires consistent capitalization. Keep shapefile components together and quote command-line paths containing spaces.
+Most figure scripts use `ROOT = Path("D:/")`, while `run_all.py` uses `D:/code`. Other scripts contain separate absolute paths, including paths on `H:/`. Update the relevant paths if the data are stored elsewhere. Some scripts use `data/map` rather than `data/Map`; directory names must match on case-sensitive systems. Keep all companion files for each Shapefile together.
 
-## 3. Generate figures from existing processed data
+## 3. Generate figures
 
-For the current Windows layout, run:
+Run the complete figure set from existing processed inputs:
 
 ```powershell
 python "D:/code/run_all.py"
 ```
 
-The runner recursively discovers Python scripts under `D:/code`, excludes itself and `__pycache__`, sorts by relative path, and runs each sequentially with the current Python interpreter. Each subprocess uses its script directory as its working directory. The runner continues after individual failures, prints a summary, and exits with status 1 if any script fails.
+The runner searches `D:/code` recursively for `.py` files (excluding itself and `__pycache__`), sorts them by relative path, and runs them sequentially. It reports failures but continues with the remaining scripts. Preprocessing scripts under `data/` are not included, and the run order is alphabetical rather than manuscript order. Newly added Python files under `code/` will also be picked up.
 
-The runner executes figure scripts only; it does not execute the preprocessing scripts under `data/`. Its alphabetical ordering is not manuscript figure order. Additional Python scripts placed under `code/` will also be discovered.
-
-To generate one figure:
+To regenerate one figure:
 
 ```powershell
 python "D:/code/Fig. 1.py"
 ```
 
-Outputs are saved to `D:/results/` and existing files with the same names can be overwritten. Spatial interpolation, model evaluation, and figure rendering can require substantial memory and time; no execution-time estimate was measured.
+Figures are saved to `D:/results/`. Existing PNGs with the same names will be overwritten. Spatial interpolation and model evaluation can be memory-intensive.
 
-## 4. Current figure mapping
+## 4. Figure scripts
 
-For every row below, the script is `code/<Figure>.py` and the output is `results/<Figure>.png`.
+Each figure uses the corresponding `code/<Figure>.py` script and is saved as `results/<Figure>.png`. Paths such as `TRW/`, `median/`, `Detrending5/`, `Sliding difference/`, and `r_diff and r_raw/` in the table refer to subdirectories of `data/Processed data/`.
 
-| Figure | Current content | Principal inputs |
+| Figure | Content | Main inputs |
 |---|---|---|
 | Fig. 1 | Site distributions, study domains and climate zones, and regional correlation summaries. | Site/observation CSVs, `Map/`, `TRW/AgeDepSpline (5+3).nc`, `median/Median_correlations.csv`. |
 | Fig. 2 | Standardized TRW/NPP patterns and trends in North America and Europe. | `TRW/AgeDepSpline (5+3).nc`, S2 NPP for ISBA-CTRIP, CLASSIC, and iMAPLE, and regional maps. |
@@ -111,13 +96,11 @@ For every row below, the script is `code/<Figure>.py` and the output is `results
 | Supplementary Fig. 5 | Pooled observation–model GPP and NPP correlations. | Observation/site CSVs, `S3_gpp1-12/`, and `S3_npp1-12/`. |
 | Supplementary Fig. 6 | Site-level GPP correlations for products selected separately by their highest median DT and NT correlations. | GPP DT/NT observation tables, flux-tower coordinates, and `S3_gpp1-12/`. |
 
-Input paths abbreviated as `TRW/`, `median/`, `Detrending5/`, `Sliding difference/`, or `r_diff and r_raw/` are under `data/Processed data/`.
+## 5. Data files
 
-## 5. Data organization
+### 5.1 Site and observation tables
 
-### 5.1 Root CSV tables
-
-| File prefix | Contents |
+| File | Contents |
 |---|---|
 | `1. Basic information of global tree-ring sites.csv` | Tree-ring site information. |
 | `2. Coordinates of Americas flux tower sites.csv` | Americas flux-tower coordinates. |
@@ -129,76 +112,69 @@ Input paths abbreviated as `TRW/`, `median/`, `Detrending5/`, `Sliding differenc
 | `8. Annual GPP data of GPP_DT_VUT method.csv` | Annual daytime-method GPP observations. |
 | `9. Annual GPP data of GPP_NT_VUT method.csv` | Annual nighttime-method GPP observations. |
 
-The root File 7 and `Processed data/median/Median_correlations.csv` are separate files. The current Fig. 1 script reads the latter.
+`7. Carbon flux & remote sensing vs. tree-ring chronology median correlations.csv` and `Processed data/median/Median_correlations.csv` are different files. Fig. 1 uses the latter.
 
-### 5.2 Maps and productivity datasets
+### 5.2 Maps and productivity products
 
-`data/Map/` contains world boundaries, North American and European climate-zone polygons, warm/cold boundaries, and Natural Earth land polygons. Existing files include `Europe 7.shp`, `Europe 7-class.shp`, `Koppen_1991_2020_NA_big7.shp`, and `Koppen_1991_2020_NA_big7_simple.shp`; preserve their distinct names.
+`data/Map/` contains geographic boundaries and the North American and European climate-zone layers, including `Europe 7.shp`, `Europe 7-class.shp`, `Koppen_1991_2020_NA_big7.shp`, and `Koppen_1991_2020_NA_big7_simple.shp`.
 
-`data/NPP and GPP/` contains processed NetCDF products grouped by experiment and variable. The directory labels `1-12` and `9-8` denote calendar-year and September–August aggregation, respectively. The precise year labeling, units, and aggregation implemented by each script and NetCDF metadata should be checked before recomputing or combining products.
+`data/NPP and GPP/` contains the productivity NetCDF products and transformation scripts. In directory names, `1-12` indicates January–December aggregation and `9-8` indicates September–August aggregation. Check the time coordinate and units of individual products before combining data from different experiments.
 
-### 5.3 Processed analysis products
+### 5.3 Processed data
 
-- `Detrending/`: site-level detrending outputs in `Detrending4/`, method-wide chronology tables, and filled chronologies in `fill/`.
-- `TRW/`: reconstruction masks and gridded chronology NetCDFs. Labels `(3+3)`, `(4+3)`, and `(5+3)` correspond to mask search radii of 3°, 4°, and 5° with at least three sites. Grid spacing is 0.5°; interpolation has additional settings in its own scripts.
-- `median/`: `Median_correlations.py` and `Median_correlations.csv`, comparing TRW with DGVM S2/S3, CMIP6, and NPP1-2 products for 1981–2010.
-- `Difference_correlation/`: a script and supplied first-difference correlation NetCDF for 1981–2010.
-- `GPP and NPP/`: `warm_gpp.csv`, `warm_npp.csv`, `cold_gpp.csv`, and `cold_npp.csv`, plus their extraction script.
-- `r_diff and r_raw/`: seven method/configuration script directories and regional moving-correlation outputs. The supplied outputs are principally in `r_diff` subdirectories; the directory title does not imply a complete corresponding `r_raw` workflow.
-- `Sliding difference/`: climate-control analysis code and `Sliding difference1-1900-center.nc`.
-- `Detrending5/`: four supplied reconstruction NetCDFs used for end-effect sensitivity. The previous documentation describes removing the last 30 years of each source series; a dedicated script establishing that truncation and regenerating these four files was not found in the inspected directories.
+- `Detrending/`: site chronologies, combined method tables, and gap-filled chronologies in `fill/`.
+- `TRW/`: reconstruction masks and gridded tree-ring chronologies. The `(3+3)`, `(4+3)`, and `(5+3)` configurations use 3°, 4°, and 5° spatial support, respectively, with at least three sites. Grid spacing is 0.5°.
+- `median/`: TRW–NPP correlation summaries for 1981–2010, including DGVM S2/S3, CMIP6, and NPP1-2 products.
+- `Difference_correlation/`: first-difference correlations for 1981–2010.
+- `GPP and NPP/`: `warm_gpp.csv`, `warm_npp.csv`, `cold_gpp.csv`, and `cold_npp.csv`.
+- `r_diff and r_raw/`: scripts and regional sliding-correlation outputs for different methods and spatial settings; outputs are primarily stored in `r_diff` subdirectories.
+- `Sliding difference/`: climate-control analyses and the sliding-difference NetCDF used in the climate figures.
+- `Detrending5/`: four reconstruction NetCDFs used for the sensitivity test that truncates the last 30 years of the tree-ring series.
 
-## 6. Recompute analyses: dependencies and order
+## 6. Rebuild the analysis products
 
-This is a dependency guide, not a single automated raw-data pipeline. Check each script's configuration before execution.
+The preprocessing scripts are organized by task rather than as a single end-to-end pipeline. Run each step only after its inputs are available.
 
-1. **Prepare original inputs.** Obtain raw tree-ring measurements, model products, and climate data. Several input locations are outside `data/`; see Section 7.
-2. **Prepare the land mask and productivity products.** Run `data/NPP and GPP/transform/1.nc.py` to create the common mask if needed. The model transformation scripts and the scripts in `CMIP6 (NPP)/` and `NPP (1-2)/` depend on that mask. Review the shared-output-directory issue below before running the transformations.
-3. **Detrend tree rings.** Run `AgeDepSpline+Spline+ModNegExp+SFRCS.R`, then the same-named `.py` script under `Processed data/Detrending/`. The Python script consolidates AgeDepSpline, Spline, ModNegExp, and SFRCS chronologies across sites for 1700–2025.
-4. **Fill eligible chronology gaps.** Run `Detrending/fill/1.fill.py`; it requires the external climate file and produces method tables ending in `+fill.csv` and climate-correlation summaries. `2.R and P.py` plots those summary statistics.
-5. **Create reconstruction masks, then interpolate.** Run the appropriate `recon_mask ... .py` script before `3+3.py`, `4+3.py`, or `5+3.py`. The actual `(3+3)` mask script is named `recon_mask (3+3) .py`, with a space before `.py`. Interpolation uses local ordinary kriging; the inspected `(5+3)` script specifies a spherical variogram, up to 100 neighbors, and five parallel jobs. Check method inputs: interpolation also lists RCS, whereas the chronology-consolidation script lists four other methods.
-6. **Generate downstream products.** Run `median/Median_correlations.py`, `Difference_correlation/Difference_correlation.py`, and `GPP and NPP/Extracting GPP and NPP.py` as needed. Run the seven scripts under `r_diff and r_raw/` for the corresponding moving-correlation configurations. The AgeDepSpline `(5+3)` script uses a 21-year window; not all figures use identical window definitions (Extended Data Fig. 1 sets `WIN=20`).
-7. **Compute climatic controls.** Run `Sliding difference/Sliding difference1-1900-center.py` after preparing TRW, selected S2 NPP, and climate inputs. It uses 21-year windows for 1900–2025 and writes the NetCDF consumed by Fig. 4 and Extended Data Figs. 7–8.
-8. **Generate manuscript figures.** Run `code/run_all.py` after all required processed inputs are ready. Supplementary Fig. 3 additionally requires the supplied `Detrending5/` products.
+1. **Original data:** Prepare the tree-ring measurements, productivity products, geographic layers, and climate inputs. Some source datasets are outside the `D:/data` directory.
+2. **Land mask and NPP processing:** Generate the common land mask using `data/NPP and GPP/transform/1.nc.py` when needed, followed by the relevant model processing scripts. Check the output directories noted below before rerunning transformations.
+3. **Tree-ring detrending:** Run `AgeDepSpline+Spline+ModNegExp+SFRCS.R`, followed by the matching `.py` script in `Processed data/Detrending/`. The Python script combines chronologies produced by AgeDepSpline, Spline, ModNegExp, and SFRCS.
+4. **Gap filling:** Run `Detrending/fill/1.fill.py` to generate the `+fill.csv` chronology tables and climate-correlation summaries. `2.R and P.py` plots the corresponding statistics.
+5. **Spatial reconstruction:** Generate the reconstruction mask with the appropriate `recon_mask` script, then run `3+3.py`, `4+3.py`, or `5+3.py`. The `(5+3)` configuration uses ordinary kriging with a spherical variogram, up to 100 neighboring sites, and five parallel jobs.
+6. **Correlation products:** Run `median/Median_correlations.py`, `Difference_correlation/Difference_correlation.py`, `GPP and NPP/Extracting GPP and NPP.py`, and the applicable scripts under `r_diff and r_raw/`.
+7. **Climate analysis:** Run `Sliding difference/Sliding difference1-1900-center.py` using the selected TRW, S2 NPP, and climate inputs. The main sliding-correlation analysis uses a 21-year window; individual scripts may differ (for example, Extended Data Fig. 1 sets `WIN=20`).
+8. **Figures:** Run `code/run_all.py` after preparing the necessary processed data. Supplementary Fig. 3 uses the separate `Detrending5/` sensitivity products.
 
-There is no dedicated S2 NPP transformation script in the inspected `transform/` directory. Existing `S2_npp9-8/` files are supplied inputs; rebuilding them requires an appropriate upstream procedure that is not included as a separate script here.
+The existing S2 NPP NetCDF files are inputs to downstream scripts; a dedicated transformation script for the S2 NPP data is not included in `transform/`. The supplied `Detrending5/` outputs likewise require their original truncation and reconstruction procedure for a complete rebuild.
 
-## 7. External inputs and current reproduction limitations
+## 7. External inputs and path checks
 
-The following input locations are coded in preprocessing scripts. Existence was checked during this inspection; these checks do not validate file contents.
+Several processing scripts refer to source data outside the project folders:
 
-| Location | Used for | Inspection status |
-|---|---|---|
-| `D:/Tree rings/rwl/width/` | Raw `.rwl` files for detrending. | Not found. |
-| `D:/S2_npptree/` | Original nppTree inputs. | Not found. |
-| `D:/S3_gpp/` | Original S3 GPP inputs. | Not found. |
-| `D:/S3_npp/` | Original S3 NPP inputs. | Not found. |
-| `D:/NPP (1-2)/` | Original paired NPP inputs. | Not found. |
-| `D:/npp and tree ring/Model data/CMIP6/NPP_year/` | Original CMIP6 NPP inputs. | Directory exists outside the packaged data tree. |
-| `H:/Climatic data/month/climate14.nc` | Gap filling and climate-control analyses. | File exists outside the packaged data tree. |
+| Path | Purpose |
+|---|---|
+| `D:/Tree rings/rwl/width/` | Original `.rwl` measurements for detrending. |
+| `D:/S2_npptree/` | Original nppTree files. |
+| `D:/S3_gpp/` | Original S3 GPP files. |
+| `D:/S3_npp/` | Original S3 NPP files. |
+| `D:/NPP (1-2)/` | Original NPP1-2 files. |
+| `D:/npp and tree ring/Model data/CMIP6/NPP_year/` | CMIP6 annual NPP data. |
+| `H:/Climatic data/month/climate14.nc` | Climate data used for gap filling and climate-control analyses. |
 
-Two transformation scripts currently set their calendar-year and cross-year outputs to the same directory:
+These paths must point to the corresponding datasets before the preprocessing scripts can run. The processed inputs already present in `data/` allow figure generation without repeating every upstream step.
 
-- `S2_nppTree_transform-1900.py`: both `OUT_12` and `OUT_98` use `S2_npptree9-8/`.
-- `S3_gpp_transform.py`: both use `S3_gpp1-12/`.
+**Output paths to check:** `S2_nppTree_transform-1900.py` currently sets both `OUT_12` and `OUT_98` to `S2_npptree9-8/`, and `S3_gpp_transform.py` sets both to `S3_gpp1-12/`. Separate these destinations if both aggregation types are to be retained; otherwise identically named outputs may overwrite one another.
 
-Outputs with identical names may overwrite each other. Resolve the intended aggregation/output locations before rerunning these scripts. The existing folder name alone is insufficient to establish which aggregation remains on disk. This inspection did not modify those scripts.
+**Filename details:** `Extended Data Fig. 3.py` and `Supplementary Fig. 3.py` include a leading space before `CLASSIC_S2_npp.nc` in one input path, with a fallback that removes the space. The corresponding climate-control script uses a similar fallback. The `(3+3)` mask script is named `recon_mask (3+3) .py`, including the space before `.py`.
 
-`Extended Data Fig. 3.py` and `Supplementary Fig. 3.py` contain a leading space before `CLASSIC_S2_npp.nc` in one configured path. Both scripts include a fallback that strips the leading space before opening the file. The climate-control preprocessing script has a similar fallback.
+**Method consistency:** The spatial reconstruction scripts may refer to RCS alongside the four methods used by the chronology-consolidation script. Select matching chronology inputs when rerunning the sensitivity comparisons.
 
-A static check of 108 literal `data/...` references in figure scripts found the referenced files/directories present, apart from those two leading-space paths resolved by their fallbacks. This is not a complete validation of dynamically constructed filenames, NetCDF variables, or numerical reproducibility.
+## 8. Data sources
 
-## 8. Source information recorded in the code
+- **Tree-ring measurements:** International Tree-Ring Data Bank (ITRDB).
+- **NPP data:** [National Earth System Science Data Center](https://www.nesdc.org.cn/sdo/detail?id=612f42ee7e28172cbed3d809) and [GLASS](https://www.glass.hku.hk/download.html).
+- **Model productivity data:** [Global Carbon Budget](https://mdosullivan.github.io/GCB/), with download commands in `data/NPP and GPP/transform/wget.sh`.
+- **CMIP6:** [CMIP6 data search](https://aims2.llnl.gov/search/cmip6/).
+- **Geographic data:** [Natural Earth 10 m land polygons](https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_land.zip).
+- **Climate data:** See the study's Supplementary Table 1 for the dataset descriptions and source references.
 
-The following source links are retained from the existing documentation and source comments; their availability and dataset versions were not independently checked in this local inspection.
-
-- Tree-ring measurements: International Tree-Ring Data Bank (ITRDB), named in the detrending script.
-- NPP products: [National Earth System Science Data Center](https://www.nesdc.org.cn/sdo/detail?id=612f42ee7e28172cbed3d809) and [GLASS](https://www.glass.hku.hk/download.html).
-- Model productivity: [Global Carbon Budget model-data page](https://mdosullivan.github.io/GCB/); download commands are stored in `data/NPP and GPP/transform/wget.sh`.
-- CMIP6: [CMIP6 data-search address recorded in the processing script](https://aims2.llnl.gov/search/cmip6/).
-- Land polygons: the mask script references [Natural Earth 10 m land](https://naturalearth.s3.amazonaws.com/10m_physical/ne_10m_land.zip), with an existing local copy in `data/Map/natural_earth_land/`.
-- Climate inputs: the previous README refers to Supplementary Table 1 for source details. The local scripts establish the climate file path but do not by themselves provide a complete dataset provenance record.
-
-## 9. Verification scope
-
-The revised guide is based on the current script contents and on-disk products. The 19 script/output name pairs, PNG headers and resolution, principal input references, processing entry points, and external input locations were inspected. Neither a Code Ocean execution entry nor a full raw-data reproduction run was verified. Use the Windows commands above for the layout documented here.
+Processed NetCDF files, masks, and chronology tables depend on the data versions and settings used when they were generated. Some upstream source-data preparation steps are not included in this repository.
