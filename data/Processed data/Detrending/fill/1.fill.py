@@ -20,6 +20,7 @@ OUTPUT_DIR=Path('D:/data/Processed data/Detrending/fill')
 CACHE_DIR=Path('D:/data/Processed data/Detrending/fill/climate_cache')
 METHODS=("Spline","ModNegExp","AgeDepSpline","SFRCS")
 SITE_PATH=ROOT/"data"/"1. Basic information of global tree-ring sites.csv"
+# See the data sources in Supplementary Table 1 for climate data provenance.
 CLIM_PATH=Path("H:/")/"Climatic data"/"month"/"climate14.nc"
 START_YEAR=1950
 END_YEAR=2025

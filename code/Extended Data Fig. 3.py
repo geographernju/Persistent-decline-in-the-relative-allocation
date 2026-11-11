@@ -288,7 +288,7 @@ def draw_map(ax,extent,region,letter):
         for plant,marker in plant_markers.items():
             rows=subset.loc[(subset["contribution_class"]==category)&(subset["plant_group"]==plant)]
             if rows.empty:continue
-            ax.scatter(rows["longitude"],rows["latitude"],s=46 if category=="Major" else 30,marker=marker,color=colors[category],edgecolors="white",linewidths=0.25,alpha=0.85,zorder=5 if category=="Major" else 3)
+            ax.scatter(rows["longitude"],rows["latitude"],s=100 if category=="Major" else 70,marker=marker,color=colors[category],edgecolors="white",linewidths=0.25,alpha=0.85,zorder=5 if category=="Major" else 3)
     xmin,xmax,ymin,ymax=extent
     ax.set_xlim(xmin,xmax)
     ax.set_ylim(ymin,ymax)
@@ -301,10 +301,10 @@ def draw_map(ax,extent,region,letter):
     categories=[category for category in ["Major","Minor","Opposing","Neutral","Unavailable"] if (subset["contribution_class"]==category).any()]
     handles=[Line2D([],[],marker="o",linestyle="none",color=colors[category],markersize=9,label=f"{category} (n = {(subset['contribution_class']==category).sum():,})") for category in categories]
     legend_kwargs={"loc":"upper left","bbox_to_anchor":(0.005,0.95)} if region=="EU" else {"loc":"lower left"}
-    legend=ax.legend(handles=handles,frameon=True,facecolor="white",edgecolor="none",framealpha=0.9,fontsize=18,handletextpad=0.4,**legend_kwargs)
+    legend=ax.legend(handles=handles,frameon=True,facecolor="white",edgecolor="none",framealpha=0.9,fontsize=24,handletextpad=0.4,**legend_kwargs)
     ax.add_artist(legend)
-    plant_handles=[Line2D([],[],marker=marker,linestyle="none",color="#555555",markersize=8,label=plant) for plant,marker in plant_markers.items() if (subset["plant_group"]==plant).any()]
-    if plant_handles:ax.legend(handles=plant_handles,loc="lower right",frameon=True,facecolor="white",edgecolor="none",framealpha=0.9,fontsize=17,handletextpad=0.4)
+    plant_handles=[Line2D([],[],marker=marker,linestyle="none",color="#555555",markersize=9,label=plant) for plant,marker in plant_markers.items() if (subset["plant_group"]==plant).any()]
+    if plant_handles:ax.legend(handles=plant_handles,loc="lower right",frameon=True,facecolor="white",edgecolor="none",framealpha=0.9,fontsize=23,handletextpad=0.4)
     ax.tick_params(direction="out",length=6,width=1.2)
     panel_label(ax,letter)
 draw_map(ax_b,na_extent,"NA","b")

@@ -6,6 +6,7 @@ import cftime
 from netCDF4 import Dataset
 from scipy.ndimage import distance_transform_edt
 ROOT=Path("D:/")
+# Original data source: CMIP6 data search portal, https://aims2.llnl.gov/search/cmip6/
 INPUT=ROOT/"npp and tree ring/Model data/CMIP6/NPP_year"
 OUT=Path('D:/data/NPP and GPP/CMIP6 (NPP)')
 MASK_FILE=Path('D:/data/NPP and GPP/transform/1.nc')

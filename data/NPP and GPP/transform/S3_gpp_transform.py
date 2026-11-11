@@ -13,7 +13,8 @@ ROOT=Path("D:/")
 # Raw data download script: D:/data/NPP and GPP/transform/wget.sh; source: https://mdosullivan.github.io/GCB/
 INPUT=ROOT/"S3_gpp"
 OUT_12=Path('D:/data/NPP and GPP/S3_gpp1-12')
-OUT_98=Path("D:/data/NPP and GPP/S3_gpp9-8")
+# OUT_12 and OUT_98 share a directory; calendar-year and cross-year outputs with identical names may overwrite each other.
+OUT_98=Path("D:/data/NPP and GPP/S3_gpp1-12")
 FAIL=Path("D:/data/NPP and GPP")
 MASK_FILE=Path('D:/data/NPP and GPP/transform/1.nc')
 for folder in (OUT_12,OUT_98,FAIL):

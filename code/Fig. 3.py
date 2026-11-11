@@ -57,7 +57,7 @@ def prepare_grid(da,bounds):
     lon=np.round((np.asarray(da.longitude.values,dtype=float)+180)%360-180,6)
     da=da.assign_coords(year=years.astype(int),latitude=lat,longitude=lon)
     da=da.sortby('year').sortby('latitude').sortby('longitude')
-    return da.sel(year=slice(1980,2010),latitude=slice(lat_min,lat_max),longitude=slice(lon_min,lon_max)).reindex(year=np.arange(1980,2011))
+    return da.sel(year=slice(1899,2023),latitude=slice(lat_min,lat_max),longitude=slice(lon_min,lon_max)).reindex(year=np.arange(1899,2024))
 def diff_corr_region(bounds):
     with xr.open_dataset(recon_path) as ds_a,xr.open_dataset(model_path) as ds_b:
         da_a=prepare_grid(get_recon_da(ds_a),bounds)
@@ -202,7 +202,7 @@ names_na,data_na=zone_box_data(*results[0],na_clim_shp,include_tropical=True)
 names_eu,data_eu=zone_box_data(*results[1],eu_clim_shp,include_tropical=False)
 box_names,box_data=combine_box_data(names_na,data_na,names_eu,data_eu)
 finite_box=[d[np.isfinite(d)] for d in box_data if np.isfinite(d).any()]
-r_sig=0.36
+r_sig=0.23
 box_min=float(np.min(np.concatenate(finite_box))) if finite_box else -1.0
 box_min=min(box_min,r_sig)
 box_min-=max((1.0-box_min)*0.04,0.02)
@@ -256,7 +256,7 @@ ax_box.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 ax_box.tick_params(axis='x',labelrotation=45,labelsize=17)
 ax_box.tick_params(axis='y',labelsize=18)
 ax_box.axhline(r_sig,color='black',linestyle='--',linewidth=1.2)
-ax_box.text(4.0,r_sig-0.08,r'$\mathit{r}$ = 0.36, $\mathit{p}$ < 0.05',ha='center',va='top',fontsize=18,color='black')
+ax_box.text(4.0,r_sig-0.08,r'$\mathit{r}$ = 0.23, $\mathit{p}$ < 0.01',ha='center',va='top',fontsize=18,color='black')
 ax_box.set_ylabel(r'$\mathit{r}$',fontsize=22)
 for key,label,color,linestyle,linewidth in series_styles:
     series=all_panel[key]

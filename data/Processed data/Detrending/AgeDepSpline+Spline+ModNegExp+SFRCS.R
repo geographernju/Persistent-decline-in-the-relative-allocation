@@ -1,7 +1,8 @@
 library(dplR)
 library(tools)
-dir.create("D:/Detrending4", showWarnings = FALSE, recursive = TRUE)
-dir.create("D:/mistake", showWarnings = FALSE, recursive = TRUE)
+dir.create("D:/data/Processed data/Detrending/Detrending4", showWarnings = FALSE, recursive = TRUE)
+dir.create("D:/data/mistake", showWarnings = FALSE, recursive = TRUE)
+# Original tree-ring data source: International Tree-Ring Data Bank (ITRDB).
 rwl_files <- list.files("D:/Tree rings/rwl/width", pattern = "\\.rwl$", full.names = TRUE)
 for (file_path in rwl_files) {
   tryCatch({
@@ -109,10 +110,10 @@ for (file_path in rwl_files) {
     eps_df <- data.frame(year = rwi_years, EPS = eps_vec)
     merged_crn <- merge(merged_crn, eps_df, by = "year", all = TRUE)
     merged_crn <- merged_crn[order(merged_crn$year), ]
-    write.csv(merged_crn, file = paste0("D:/Detrending4/", csv_name, ".csv"), row.names = FALSE)
+    write.csv(merged_crn, file = paste0("D:/data/Processed data/Detrending/Detrending4/", csv_name, ".csv"), row.names = FALSE)
     message("SUCCESS: ", file_name)
   }, error = function(e) {
-    file.copy(file_path, paste0("D:/mistake/", basename(file_path)), overwrite = TRUE)
+    file.copy(file_path, paste0("D:/data/mistake/", basename(file_path)), overwrite = TRUE)
     message("FAILED: ", basename(file_path), " | ", e$message)
   })
 }

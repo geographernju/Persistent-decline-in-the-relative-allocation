@@ -15,12 +15,12 @@ def find_root():
 ROOT = Path('D:/')
 a_path = ROOT / 'data/Processed data/TRW/AgeDepSpline (5+3).nc'
 b_dir = ROOT / 'data/NPP and GPP/S2_npp9-8'
-world_shp = ROOT / 'data/Map/World.shp'
+world_shp = ROOT / 'data/Map/World_countries.shp'
 out_dir_grid = ROOT / 'results'
 os.makedirs(out_dir_grid, exist_ok=True)
-yr0, yr1 = (1981, 2010)
-lon_min, lon_max = (-11.0, 57)
-lat_min, lat_max = (28, 75.0)
+yr0, yr1 = (1900, 2023)
+lon_min, lon_max = (-167.27, -55.0)
+lat_min, lat_max = (9.58, 74.99)
 plt.rcParams['axes.unicode_minus'] = False
 def sel_year(ds):
     if 'year' not in ds.coords:
@@ -80,8 +80,8 @@ for fname in os.listdir(b_dir):
         r_median = float(np.nanmedian(r))
         lat_c = B1['latitude'].values
         lon_c = B1['longitude'].values
-        dlon = np.abs(np.median(np.diff(lon_c))) if lon_c.size > 1 else 0.5
-        dlat = np.abs(np.median(np.diff(lat_c))) if lat_c.size > 1 else 0.5
+        dlon = float(np.abs(np.median(np.diff(lon_c)))) if lon_c.size > 1 else 0.5
+        dlat = float(np.abs(np.median(np.diff(lat_c)))) if lat_c.size > 1 else 0.5
         lon_edges = np.concatenate(([lon_c[0] - dlon / 2], (lon_c[:-1] + lon_c[1:]) / 2, [lon_c[-1] + dlon / 2]))
         lat_edges = np.concatenate(([lat_c[0] - dlat / 2], (lat_c[:-1] + lat_c[1:]) / 2, [lat_c[-1] + dlat / 2]))
         LonE, LatE = np.meshgrid(lon_edges, lat_edges)
@@ -111,7 +111,7 @@ for ax, item in zip(axes, results_top):
     ax.set_ylim(lat_min, lat_max)
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.text(0.02, 0.98, f"{item['name']}\nMedian " + r"$\mathit{r}$" + f" = {item['median']:.2f}", transform=ax.transAxes, ha='left', va='top', fontsize=11, path_effects=[pe.withStroke(linewidth=1.2, foreground='white')])
+    ax.text(0.02, 0.02, f"{item['name']}\nMedian " + r"$\mathit{r}$" + f" = {item['median']:.2f}", transform=ax.transAxes, ha='left', va='bottom', fontsize=12, path_effects=[pe.withStroke(linewidth=1.2, foreground='white')])
 for k in range(len(results_top), nrows * ncols):
     axes[k].axis('off')
 plt.subplots_adjust(left=0.03, right=0.88, top=0.97, bottom=0.05, wspace=0.035, hspace=0.01)

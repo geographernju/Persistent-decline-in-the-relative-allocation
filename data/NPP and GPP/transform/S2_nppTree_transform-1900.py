@@ -12,7 +12,8 @@ from scipy.ndimage import distance_transform_edt
 ROOT=Path("D:/")
 # Raw data download script: D:/data/NPP and GPP/transform/wget.sh; source: https://mdosullivan.github.io/GCB/
 INPUT=ROOT/"S2_npptree"
-OUT_12=Path("D:/data/NPP and GPP/S2_npptree1-12")
+# OUT_12 and OUT_98 share a directory; calendar-year and cross-year outputs with identical names may overwrite each other.
+OUT_12=Path("D:/data/NPP and GPP/S2_npptree9-8")
 OUT_98=Path('D:/data/NPP and GPP/S2_npptree9-8')
 FAIL=Path("D:/data/NPP and GPP")
 MASK_FILE=Path('D:/data/NPP and GPP/transform/1.nc')

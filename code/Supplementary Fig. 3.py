@@ -1,94 +1,123 @@
-
-import xarray as xr,numpy as np,geopandas as gpd,matplotlib.pyplot as plt
-from scipy.stats import pearsonr
-from matplotlib.ticker import MultipleLocator,FormatStrFormatter
+import os, numpy as np, xarray as xr, matplotlib.pyplot as plt, geopandas as gpd
+from matplotlib.colors import TwoSlopeNorm
+import matplotlib.patheffects as pe
 from pathlib import Path
-plt.rcParams['font.family']='Times New Roman';plt.rcParams['mathtext.fontset']='custom';plt.rcParams['mathtext.rm']='Times New Roman';plt.rcParams['mathtext.it']='Times New Roman:italic';plt.rcParams['font.size']=24;plt.rcParams['axes.unicode_minus']=False
-ROOT=Path('D:/')
-npp_paths=[ROOT/'data/NPP and GPP/S2_npp9-8/ISBA-CTRIP_S2_npp.nc',ROOT/'data/NPP and GPP/S2_npp9-8/ CLASSIC_S2_npp.nc',ROOT/'data/NPP and GPP/S2_npp9-8/iMAPLE_S2_npp.nc']
-npp_names=['ISBA-CTRIP','CLASSIC','iMAPLE']
-eu_shp_path=ROOT/'data/Map/Europe 7-class.shp';na_shp_path=ROOT/'data/Map/Koppen_1991_2020_NA_big7_simple.shp';out_png=ROOT/'results/Supplementary Fig. 3.png'
-models=[('ModNegExp',ROOT/'data/Processed data/Detrending5/ModNegExp (5+3).nc'),('AgeDepSpline',ROOT/'data/Processed data/Detrending5/AgeDepSpline (5+3).nc'),('SFRCS',ROOT/'data/Processed data/Detrending5/SFRCS (5+3).nc'),('Spline',ROOT/'data/Processed data/Detrending5/Spline (5+3).nc')]
-PLOT_YEARS=np.arange(1900,1996)
-def temporal_std(da):
-    count=da.count('year');mean=da.mean('year',skipna=True)
-    return np.sqrt(((da-mean)**2).sum('year',skipna=True)/count.where(count>0))
-def prepare_data(ds,var):
-    da=ds[var];time_dim=[d for d in da.dims if d not in ('latitude','longitude')][0]
-    if time_dim=='year':da=da.assign_coords(year=ds['year'].values)
-    else:da=da.assign_coords({time_dim:ds['year'].values}).rename({time_dim:'year'})
-    if float(np.nanmin(da.longitude.values))>=0:da=da.assign_coords(longitude=(da.longitude+180)%360-180)
-    return da.sortby('year').sortby('latitude').sortby('longitude')
-eu_shp=gpd.read_file(eu_shp_path);eu_shp=eu_shp.set_crs('EPSG:4326') if eu_shp.crs is None else eu_shp.to_crs('EPSG:4326')
-na_shp=gpd.read_file(na_shp_path);na_shp=na_shp.set_crs('EPSG:4326') if na_shp.crs is None else na_shp.to_crs('EPSG:4326')
-region_cache={}
-def region_indices(da):
-    key=(tuple(da.latitude.values),tuple(da.longitude.values))
-    if key not in region_cache:
-        stacked=da.isel(year=0).stack(points=('latitude','longitude'))
-        points=gpd.GeoDataFrame({'index':np.arange(stacked.sizes['points'])},geometry=gpd.points_from_xy(stacked.longitude.values,stacked.latitude.values),crs='EPSG:4326')
-        eu_ids=np.unique(gpd.sjoin(points,eu_shp,how='inner',predicate='within')['index'].values)
-        na_ids=np.unique(gpd.sjoin(points,na_shp,how='inner',predicate='within')['index'].values)
-        if not len(eu_ids) or not len(na_ids):raise ValueError('No region grid cells found')
-        region_cache[key]=(eu_ids,na_ids)
-    return region_cache[key]
-def extract_series(model,trw_path,npp_path):
-    if not npp_path.exists() and npp_path.name.startswith(' '):npp_path=npp_path.with_name(npp_path.name.lstrip())
-    with xr.open_dataset(trw_path) as ds_trw,xr.open_dataset(npp_path) as ds_npp:
-        trw=prepare_data(ds_trw,model);npp=prepare_data(ds_npp,'npp')
-        years=np.intersect1d(trw.year.values,npp.year.values)
-        years=years[(years>=1900)&(years<=1995)]
-        if years.size<3:raise ValueError(f'Insufficient common years: {model}, {npp_path.name}')
-        trw=trw.sel(year=years);npp=npp.sel(year=years)
-        ratio=trw/npp;ratio=ratio.where(np.isfinite(ratio))
-        mean=ratio.mean('year',skipna=True);std=temporal_std(ratio)
-        ratio_z=((ratio-mean)/std).where(std>0)
-        eu_ids,na_ids=region_indices(ratio_z)
-        stacked=ratio_z.stack(points=('latitude','longitude'))
-        def series(ids):
-            q=stacked.isel(points=ids).quantile([0.25,0.5,0.75],dim='points',skipna=True)
-            return np.stack([q.sel(quantile=0.5).values,q.sel(quantile=0.25).values,q.sel(quantile=0.75).values])
-        return years,series(eu_ids),series(na_ids)
-def combine_series(series):
-    arr=np.stack(series)
-    counts=np.isfinite(arr).sum(axis=0)
-    return np.divide(np.nansum(arr,axis=0),counts,out=np.full(arr.shape[1:],np.nan),where=counts>0)
-def correlation(eu,na):
-    mask=np.isfinite(eu)&np.isfinite(na)
-    if mask.sum()<3 or np.std(eu[mask])==0 or np.std(na[mask])==0:return np.nan,np.nan
-    return pearsonr(eu[mask],na[mask])
-fig,axes=plt.subplots(2,2,figsize=(18,11),dpi=300,sharex=True,sharey=True)
-axes=axes.ravel();letters=['a','b','c','d']
-for ax,(model,path),letter in zip(axes,models,letters):
-    eu_models=[];na_models=[]
-    for npp_name,npp_path in zip(npp_names,npp_paths):
-        years,eu,na=extract_series(model,path,npp_path)
-        aligned_eu=np.full((3,len(PLOT_YEARS)),np.nan);aligned_na=np.full((3,len(PLOT_YEARS)),np.nan)
-        aligned_eu[:,years-PLOT_YEARS[0]]=eu;aligned_na[:,years-PLOT_YEARS[0]]=na
-        eu_models.append(aligned_eu);na_models.append(aligned_na)
-        r_model,p_model=correlation(eu[0],na[0])
-        print(f'{model} | {npp_name}: r={r_model:.3f}, p={p_model:.4g}')
-    eu=combine_series(eu_models);na=combine_series(na_models)
-    r,p=correlation(eu[0],na[0])
-    line_eu,=ax.plot(PLOT_YEARS,eu[0],linewidth=2.2,label='EU')
-    ax.fill_between(PLOT_YEARS,eu[1],eu[2],color=line_eu.get_color(),alpha=0.25)
-    line_na,=ax.plot(PLOT_YEARS,na[0],linewidth=2.2,label='NA')
-    ax.fill_between(PLOT_YEARS,na[1],na[2],color=line_na.get_color(),alpha=0.25)
-    ax.axvline(x=1945,color='black',linestyle='--',linewidth=1.8,zorder=5)
-    ax.text(1945,0.03,'1945',color='black',fontsize=24,ha='center',va='bottom',transform=ax.get_xaxis_transform(),zorder=6)
-    ax.set_xlim(1900,1995);ax.tick_params(labelsize=22)
-    ax.xaxis.set_major_locator(MultipleLocator(20));ax.yaxis.set_major_locator(MultipleLocator(1));ax.yaxis.set_major_formatter(FormatStrFormatter('%d'))
-    ax.text(0.02,0.98,letter,transform=ax.transAxes,ha='left',va='top',fontweight='bold',fontsize=30)
-    ax.text(0.5,0.98,model,transform=ax.transAxes,ha='center',va='top',fontsize=24)
-    if np.isfinite(p):p_text=r'$\mathit{p}$ < 0.001' if p<0.001 else rf'$\mathit{{p}}$ = {p:.3f}'
-    else:p_text=r'$\mathit{p}$ = NA'
-    r_text=rf'$\mathit{{r}}$ = {r:.2f}' if np.isfinite(r) else r'$\mathit{r}$ = NA'
-    ax.text(0.97,0.08,r_text+', '+p_text,transform=ax.transAxes,ha='right',va='bottom',fontsize=21)
-    print(f'{model} | Combined: r={r:.3f}, p={p:.4g}')
-axes[0].legend(frameon=True,fancybox=False,edgecolor='black',fontsize=18,loc='upper right')
-axes[2].set_xlabel('Year',fontsize=24);axes[3].set_xlabel('Year',fontsize=24)
-fig.text(0.015,0.5,'Standardized TRW/NPP',rotation=90,ha='center',va='center',fontsize=24)
-fig.tight_layout(rect=[0.035,0.02,1,1]);out_png.parent.mkdir(parents=True,exist_ok=True)
-fig.savefig(out_png,bbox_inches='tight',pad_inches=0.12,facecolor='white',dpi=600)
-plt.close(fig)
-print('✅ Saved figure:',out_png)
+plt.rcParams['font.family'] = 'Times New Roman'
+plt.rcParams['mathtext.fontset'] = 'custom'
+plt.rcParams['mathtext.rm'] = 'Times New Roman'
+plt.rcParams['mathtext.it'] = 'Times New Roman:italic'
+def find_root():
+    p = Path(__file__).resolve()
+    for d in [p.parent] + list(p.parents):
+        if (d / 'data').exists():
+            return d
+    return p.parents[1]
+ROOT = Path('D:/')
+a_path = ROOT / 'data/Processed data/TRW/AgeDepSpline (5+3).nc'
+b_dir = ROOT / 'data/NPP and GPP/S2_npp9-8'
+world_shp = ROOT / 'data/Map/World.shp'
+out_dir_grid = ROOT / 'results'
+os.makedirs(out_dir_grid, exist_ok=True)
+yr0, yr1 = (1900, 2023)
+lon_min, lon_max = (-11.0, 57)
+lat_min, lat_max = (28, 75.0)
+plt.rcParams['axes.unicode_minus'] = False
+def sel_year(ds):
+    if 'year' not in ds.coords:
+        raise ValueError('Missing year coordinate')
+    ds = ds.sel(year=slice(yr0, yr1))
+    ds['year'] = ds['year'].astype(np.int32)
+    return ds
+def corr_min_n(x, y, min_n=10):
+    v = np.isfinite(x) & np.isfinite(y)
+    n = v.sum(axis=0)
+    vx, vy = (np.where(v, x, 0.0), np.where(v, y, 0.0))
+    sx, sy = (vx.sum(axis=0), vy.sum(axis=0))
+    sxx, syy = ((vx * vx).sum(axis=0), (vy * vy).sum(axis=0))
+    sxy = (vx * vy).sum(axis=0)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        mx, my = (sx / n, sy / n)
+        num = sxy - n * mx * my
+        den = np.sqrt((sxx - n * mx * mx) * (syy - n * my * my))
+        r = np.divide(num, den, out=np.full_like(num, np.nan, dtype=float), where=(den > 0) & (n >= min_n))
+    return r
+world = gpd.read_file(world_shp)
+with xr.open_dataset(a_path) as da:
+    da = da.load()
+da = sel_year(da)
+if 'AgeDepSpline' not in da:
+    raise ValueError('AgeDepSpline is missing from dataset A')
+A = da['AgeDepSpline'].transpose('year', 'latitude', 'longitude')
+results = []
+for fname in os.listdir(b_dir):
+    if not fname.lower().endswith('.nc'):
+        continue
+    if fname.startswith('2'):
+        print(f"[Ranking skipped] {fname}: starts with '2'")
+        continue
+    fpath = os.path.join(b_dir, fname)
+    try:
+        with xr.open_dataset(fpath) as db:
+            db = db.load()
+        db = sel_year(db)
+        if 'npp' not in db:
+            print(f'[Skipped] {fname}: npp is missing')
+            continue
+        B = db['npp'].transpose('year', 'latitude', 'longitude')
+        A1, B1 = xr.align(A, B, join='inner')
+        if A1.sizes['year'] < 4:
+            print(f'[Skipped] {fname}: insufficient common years')
+            continue
+        A1 = A1.diff('year')
+        B1 = B1.diff('year')
+        A1, B1 = xr.align(A1, B1, join='inner')
+        if A1.sizes['year'] < 3:
+            print(f'[Skipped] {fname}: insufficient years after differencing')
+            continue
+        A1 = A1.sel(latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max))
+        B1 = B1.sel(latitude=slice(lat_min, lat_max), longitude=slice(lon_min, lon_max))
+        r = corr_min_n(A1.values.astype(float), B1.values.astype(float), min_n=10)
+        r_median = float(np.nanmedian(r))
+        lat_c = B1['latitude'].values
+        lon_c = B1['longitude'].values
+        dlon = np.abs(np.median(np.diff(lon_c))) if lon_c.size > 1 else 0.5
+        dlat = np.abs(np.median(np.diff(lat_c))) if lat_c.size > 1 else 0.5
+        lon_edges = np.concatenate(([lon_c[0] - dlon / 2], (lon_c[:-1] + lon_c[1:]) / 2, [lon_c[-1] + dlon / 2]))
+        lat_edges = np.concatenate(([lat_c[0] - dlat / 2], (lat_c[:-1] + lat_c[1:]) / 2, [lat_c[-1] + dlat / 2]))
+        LonE, LatE = np.meshgrid(lon_edges, lat_edges)
+        results.append({'name': os.path.splitext(fname)[0].removesuffix('_S2_npp'), 'r': r, 'LonE': LonE, 'LatE': LatE, 'median': r_median})
+    except Exception as e:
+        print(f'[Failed] {fname}: {e}')
+if len(results) == 0:
+    raise RuntimeError('No usable results are available for the composite figure')
+results_top = sorted(results, key=lambda d: d['median'], reverse=True)[:9]
+ncols, nrows = (3, 3)
+fig_w, fig_h = (ncols * 4.2, nrows * 2.0)
+fig, axes = plt.subplots(nrows, ncols, figsize=(fig_w, fig_h), dpi=600, sharex=True, sharey=True)
+axes = axes.ravel()
+all_abs = np.concatenate([np.abs(x['r'].ravel()) for x in results_top])
+vlim = float(np.nanpercentile(all_abs, 98))
+vlim = min(1.0, max(0.5, vlim))
+norm = TwoSlopeNorm(vmin=-vlim, vcenter=0, vmax=vlim)
+cmap = 'coolwarm'
+for ax in axes:
+    for s in ax.spines.values():
+        s.set_linewidth(0.6)
+        s.set_edgecolor('#666666')
+for ax, item in zip(axes, results_top):
+    world.plot(ax=ax, facecolor='#f4f4f4', edgecolor='#bbbbbb', linewidth=0.3)
+    ax.pcolormesh(item['LonE'], item['LatE'], item['r'], cmap=cmap, norm=norm, shading='flat')
+    ax.set_xlim(lon_min, lon_max)
+    ax.set_ylim(lat_min, lat_max)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.text(0.02, 0.98, f"{item['name']}\nMedian " + r"$\mathit{r}$" + f" = {item['median']:.2f}", transform=ax.transAxes, ha='left', va='top', fontsize=11, path_effects=[pe.withStroke(linewidth=1.2, foreground='white')])
+for k in range(len(results_top), nrows * ncols):
+    axes[k].axis('off')
+plt.subplots_adjust(left=0.03, right=0.88, top=0.97, bottom=0.05, wspace=0.035, hspace=0.01)
+cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=axes.tolist(), location='right', shrink=0.6, pad=0.05, extend='both')
+cb.set_label(r'$\mathit{r}$(ΔNPP, ΔTRW)')
+out_grid = ROOT / 'results/Supplementary Fig. 3.png'
+plt.savefig(out_grid, dpi=600, bbox_inches='tight', pad_inches=0.1)
+plt.close()
+print('✅ Saved figure:', out_grid)
