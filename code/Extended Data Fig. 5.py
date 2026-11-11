@@ -1,3 +1,4 @@
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -15,8 +16,8 @@ METHODS=[
     ('ModNegExp (5+3)',ROOT/'data/Processed data/r_diff and r_raw/ModNegExp (5+3)'),
     ('SFRCS (5+3)',ROOT/'data/Processed data/r_diff and r_raw/SFRCS (5+3)'),
     ('Spline (5+3)',ROOT/'data/Processed data/r_diff and r_raw/Spline (5+3)'),
-    ('AgeDepSpline (3+3)',ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (3+3)'),
     ('AgeDepSpline (4+3)',ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (4+3)'),
+    ('AgeDepSpline (3+3)',ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (3+3)'),
     ('AgeDepSpline (5+3) nppTree',ROOT/'data/Processed data/r_diff and r_raw/AgeDepSpline (5+3npptree)')
 ]
 def format_r(value,pos):
